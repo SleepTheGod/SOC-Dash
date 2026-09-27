@@ -1,4 +1,3 @@
-```markdown
 # SOC Dash
 
 A lightweight, single host Security Operations Center dashboard that runs entirely in the browser and renders live server telemetry from a single PHP file.
