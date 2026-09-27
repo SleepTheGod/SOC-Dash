@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOC Dashboard</title>
+<style>
+:root {
+    --bg: #0a0e14; --panel: #111721; --panel-2: #0d131c; --border: #1e2836;
+    --text: #c8d3e0; --muted: #6b7a8f; --accent: #00e5a0; --accent-2: #38bdf8;
+    --good: #22c55e; --warn: #f59e0b; --crit: #ef4444; --info: #38bdf8;
+    --shadow: 0 4px 20px rgba(0,0,0,.5);
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: radial-gradient(1200px 600px at 20% -10%, #0d1a24 0%, var(--bg) 60%);
+    color: var(--text); font-size: 13px; line-height: 1.45; min-height: 100vh;
+}
+.topbar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px; border-bottom:1px solid var(--border);
+    background:rgba(10,14,20,.85); backdrop-filter:blur(8px);
+    position:sticky; top:0; z-index:10;
+}
+.brand { display:flex; align-items:center; gap:12px; }
+.brand .logo {
+    width:30px; height:30px; border-radius:8px;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    display:flex; align-items:center; justify-content:center;
+    color:#001; font-weight:800; font-size:14px;
+    box-shadow:0 0 20px rgba(0,229,160,.4);
+}
+.brand h1 { font-size:15px; margin:0; letter-spacing:.5px; }
+.brand small { color:var(--muted); font-size:11px; }
+.topbar .meta { color:var(--muted); font-size:11px; text-align:right; }
+.topbar .meta b { color:var(--text); }
+
+.status-pill { padding:4px 12px; border-radius:999px; font-weight:700; letter-spacing:.8px; font-size:11px; text-transform:uppercase; }
+.status-pill.good { background:rgba(34,197,94,.12); color:var(--good); border:1px solid rgba(34,197,94,.4); }
+.status-pill.warn { background:rgba(245,158,11,.12); color:var(--warn); border:1px solid rgba(245,158,11,.4); }
+.status-pill.crit { background:rgba(239,68,68,.14); color:var(--crit); border:1px solid rgba(239,68,68,.5); animation:pulse 1.6s infinite; }
+.status-pill.off  { background:rgba(107,122,143,.15); color:var(--muted); border:1px solid var(--border); }
+@keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(239,68,68,.5); } 50% { box-shadow:0 0 0 8px rgba(239,68,68,0); } }
+
+.live-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--muted); margin-right:6px; vertical-align:middle; }
+.live-dot.on   { background:var(--good); box-shadow:0 0 8px var(--good); animation:blink 2s infinite; }
+.live-dot.err  { background:var(--crit); box-shadow:0 0 8px var(--crit); }
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+
+.grid { display:grid; grid-template-columns:repeat(12,1fr); gap:16px; padding:20px 22px 60px; max-width:1600px; margin:0 auto; }
+.card { grid-column:span 12; background:linear-gradient(180deg,var(--panel),var(--panel-2)); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); overflow:hidden; }
+.card .hd { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); background:rgba(255,255,255,.02); }
+.card .hd h2 { font-size:12px; letter-spacing:1.2px; text-transform:uppercase; color:var(--muted); margin:0; }
+.card .hd .count { font-size:11px; color:var(--muted); }
+.card .bd { padding:14px 16px; }
+
+.kpis { display:grid; grid-template-columns:repeat(6,1fr); gap:16px; grid-column:span 12; }
+.kpi { background:linear-gradient(180deg,var(--panel),var(--panel-2)); border:1px solid var(--border); border-radius:12px; padding:14px 16px; position:relative; overflow:hidden; box-shadow:var(--shadow); }
+.kpi::before { content:''; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--accent); }
+.kpi.warn::before { background:var(--warn); } .kpi.crit::before { background:var(--crit); }
+.kpi .label { color:var(--muted); font-size:10.5px; letter-spacing:1px; text-transform:uppercase; }
+.kpi .value { font-size:24px; font-weight:700; margin-top:6px; }
+.kpi .sub { color:var(--muted); font-size:11px; margin-top:4px; }
+
+.meter { height:8px; background:#0a0f16; border-radius:999px; overflow:hidden; border:1px solid var(--border); }
+.meter > span { display:block; height:100%; background:var(--good); transition:width .4s; }
+.meter > span.ok   { background:linear-gradient(90deg,#0ea5e9,#22c55e); }
+.meter > span.warn { background:linear-gradient(90deg,#f59e0b,#ef4444); }
+.meter > span.crit { background:linear-gradient(90deg,#ef4444,#b91c1c); }
+
+table { width:100%; border-collapse:collapse; font-size:12.5px; }
+th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
+th { color:var(--muted); font-weight:600; font-size:11px; letter-spacing:.8px; text-transform:uppercase; background:rgba(255,255,255,.02); }
+tbody tr:hover { background:rgba(56,189,248,.05); }
+td.k { color:var(--muted); width:220px; }
+td.num { text-align:right; font-variant-numeric:tabular-nums; }
+
+.tag { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:600; letter-spacing:.4px; border:1px solid transparent; }
+.tag.good { color:var(--good); background:rgba(34,197,94,.1); border-color:rgba(34,197,94,.3); }
+.tag.warn { color:var(--warn); background:rgba(245,158,11,.1); border-color:rgba(245,158,11,.3); }
+.tag.crit { color:var(--crit); background:rgba(239,68,68,.1); border-color:rgba(239,68,68,.4); }
+.tag.info { color:var(--info); background:rgba(56,189,248,.1); border-color:rgba(56,189,248,.3); }
+.tag.mute { color:var(--muted); background:rgba(107,122,143,.08); border-color:var(--border); }
+
+.muted { color:var(--muted); } .right { text-align:right; } .mono { font-family:ui-monospace,monospace; }
+.bar { display:flex; align-items:center; gap:8px; } .bar .meter { flex:1; }
+.c-3 { grid-column:span 3; } .c-4 { grid-column:span 4; } .c-6 { grid-column:span 6; } .c-8 { grid-column:span 8; } .c-12 { grid-column:span 12; }
+@media (max-width:1100px){ .kpis{grid-template-columns:repeat(3,1fr);} .c-3,.c-4,.c-6,.c-8{grid-column:span 12;} }
+@media (max-width:600px){ .kpis{grid-template-columns:repeat(2,1fr);} }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="brand">
+        <div class="logo">SOC</div>
+        <div>
+            <h1>Server SOC Dashboard</h1>
+            <small id="hostInfo">connecting…</small>
+        </div>
+    </div>
+    <div class="meta">
+        <span class="status-pill off" id="statusPill">OFFLINE</span>
+        <div style="margin-top:4px">
+            <span class="live-dot" id="liveDot"></span>
+            <span id="liveText">connecting</span>
+            · <b id="updatedAt">—</b>
+        </div>
+    </div>
+</div>
+
+<div class="grid">
+    <div class="kpis" id="kpiStrip"></div>
+
+    <div class="card c-6">
+        <div class="hd"><h2>System Information</h2><span class="count">host telemetry</span></div>
+        <div class="bd"><table><tbody id="sysInfo"></tbody></table></div>
+    </div>
+
+    <div class="card c-6">
+        <div class="hd"><h2>Resource Utilization</h2><span class="count">memory &amp; swap</span></div>
+        <div class="bd" id="resUtil"></div>
+    </div>
+
+    <div class="card c-12">
+        <div class="hd"><h2>Filesystem Usage</h2><span class="count" id="diskCount">—</span></div>
+        <div class="bd">
+            <table>
+                <thead><tr><th>Mount</th><th>Device</th><th class="right">Size</th><th class="right">Used</th><th class="right">Avail</th><th style="width:30%">Usage</th></tr></thead>
+                <tbody id="diskTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card c-8">
+        <div class="hd"><h2>Top Processes by CPU</h2><span class="count" id="procCount">—</span></div>
+        <div class="bd" style="padding:0">
+            <table>
+                <thead><tr><th class="right">PID</th><th class="right">PPID</th><th>User</th><th>Command</th><th class="right">%MEM</th><th class="right">%CPU</th></tr></thead>
+                <tbody id="procTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card c-4">
+        <div class="hd"><h2>Active Sessions</h2><span class="count" id="userCount">—</span></div>
+        <div class="bd" style="padding:0">
+            <table><thead><tr><th>User</th><th>TTY</th><th>From</th><th>When</th></tr></thead><tbody id="userTable"></tbody></table>
+        </div>
+    </div>
+
+    <div class="card c-6">
+        <div class="hd"><h2>Failed SSH Logins · 24h</h2><span class="count" id="failCount">—</span></div>
+        <div class="bd" style="padding:0">
+            <table><thead><tr><th>Source IP</th><th>Attempts</th><th style="width:40%">Volume</th><th>Severity</th></tr></thead><tbody id="failTable"></tbody></table>
+        </div>
+    </div>
+
+    <div class="card c-6">
+        <div class="hd"><h2>Listening Ports</h2><span class="count" id="portCount">—</span></div>
+        <div class="bd" style="padding:0">
+            <table><thead><tr><th>Proto</th><th>Local Address</th><th>Peer</th><th>Process</th></tr></thead><tbody id="portTable"></tbody></table>
+        </div>
+    </div>
+</div>
+
+<script>
+/* =================================================================
+ * Configuration
+ * ================================================================= */
+const SOC_CONFIG = {
+    apiUrl:    'api.php',
+    token:     'REPLACE_WITH_LONG_RANDOM_TOKEN', // must match config.php
+    interval:  5000,   // ms between polls
+    timeout:   4000,   // fetch timeout
+    thresholds: { diskWarn:75, diskCrit:90, memWarn:75, memCrit:90, loadWarn:4, failWarn:20, failCrit:100 }
+};
+
+/* =================================================================
+ * Utilities
+ * ================================================================= */
+const $ = id => document.getElementById(id);
+function h(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function fmtBytes(b){const u=['B','KB','MB','GB','TB','PB'];let i=0;while(b>=1024&&i<u.length-1){b/=1024;i++;}return (Math.round(b*100)/100)+' '+u[i];}
+function sevClass(p){const t=SOC_CONFIG.thresholds;if(p>=t.diskCrit)return'crit';if(p>=t.diskWarn)return'warn';if(p>=50)return'ok';return'good';}
+
+/* =================================================================
+ * Fetch with timeout
+ * ================================================================= */
+async function fetchData() {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), SOC_CONFIG.timeout);
+    try {
+        const r = await fetch(SOC_CONFIG.apiUrl, {
+            cache: 'no-store',
+            headers: { 'X-SOC-Token': SOC_CONFIG.token },
+            signal: ctrl.signal
+        });
+        clearTimeout(t);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.json();
+    } finally {
+        clearTimeout(t);
+    }
+}
+
+/* =================================================================
+ * Renders
+ * ================================================================= */
+function renderAll(d) {
+    $('hostInfo').textContent = `${d.host.hostname} · ${d.host.os} · ${d.host.kernel}`;
+    $('updatedAt').textContent = new Date().toLocaleTimeString();
+
+    renderStatus(d);
+    renderKPIs(d);
+    renderSysInfo(d);
+    renderResUtil(d);
+    renderDisks(d);
+    renderProcs(d);
+    renderUsers(d);
+    renderFailures(d);
+    renderPorts(d);
+}
+
+function renderStatus(d) {
+    const t = SOC_CONFIG.thresholds;
+    let crit = 0, warn = 0;
+    d.disks.forEach(x => { if (x.pct >= t.diskCrit) crit++; else if (x.pct >= t.diskWarn) warn++; });
+    const memPct = d.memory.total > 0 ? d.memory.used / d.memory.total * 100 : 0;
+    if (memPct >= t.memCrit) crit++; else if (memPct >= t.memWarn) warn++;
+    if (parseFloat(d.load[0]) > t.loadWarn) warn++;
+    const fail = d.failedLogins.reduce((a,b)=>a+b.count,0);
+    if (fail >= t.failCrit) crit++; else if (fail >= t.failWarn) warn++;
+
+    const pill = $('statusPill');
+    if (crit > 0)      { pill.textContent = 'CRITICAL'; pill.className = 'status-pill crit'; }
+    else if (warn > 0) { pill.textContent = 'WARNING';  pill.className = 'status-pill warn'; }
+    else               { pill.textContent = 'NOMINAL';  pill.className = 'status-pill good'; }
+}
+
+function renderKPIs(d) {
+    const t = SOC_CONFIG.thresholds;
+    const memPct = d.memory.total > 0 ? Math.round(d.memory.used / d.memory.total * 100) : 0;
+    const root = d.disks.find(x => x.mount === '/') || d.disks[0] || {pct:0, used:0, size:0};
+    const failTotal = d.failedLogins.reduce((a,b)=>a+b.count,0);
+    const failCls = failTotal >= t.failCrit ? 'crit' : (failTotal >= t.failWarn ? 'warn' : 'good');
+
+    const kpis = [
+        { label:'Memory', value:memPct+'%', sub:`${fmtBytes(d.memory.used)} / ${fmtBytes(d.memory.total)}`, cls: memPct>=t.memCrit?'crit':(memPct>=t.memWarn?'warn':'') },
+        { label:'Root FS', value:root.pct+'%', sub:`${fmtBytes(root.used)} / ${fmtBytes(root.size)}`, cls: sevClass(root.pct) },
+        { label:'Load (1/5/15)', value:d.load.join(' / '), sub:'uptime '+d.host.uptime, cls:'', small:true },
+        { label:'Listening Ports', value:d.listeners.length, sub:'tcp + udp sockets', cls:'' },
+        { label:'Failed SSH (24h)', value:failTotal, sub:`${d.failedLogins.length} unique source IPs`, cls: failCls },
+        { label:'Active Users', value:d.users.length, sub:'via `who`', cls:'' }
+    ];
+    $('kpiStrip').innerHTML = kpis.map(k => `
+        <div class="kpi ${h(k.cls)}">
+            <div class="label">${h(k.label)}</div>
+            <div class="value" ${k.small?'style="font-size:18px"':''}>${h(k.value)}</div>
+            <div class="sub">${h(k.sub)}</div>
+        </div>`).join('');
+}
+
+function renderSysInfo(d) {
+    const rows = [
+        ['Hostname',d.host.hostname],['OS',d.host.os],['Kernel',d.host.kernel],
+        ['Architecture',d.host.arch],['Distro',d.host.distro],['PHP Version',d.host.php],
+        ['Uptime',d.host.uptime],['Server Time',d.host.time]
+    ];
+    $('sysInfo').innerHTML = rows.map(([k,v]) =>
+        `<tr><td class="k">${h(k)}</td><td class="mono">${h(v)}</td></tr>`).join('');
+}
+
+function renderResUtil(d) {
+    const t = SOC_CONFIG.thresholds;
+    const memPct  = d.memory.total > 0 ? Math.round(d.memory.used / d.memory.total * 100) : 0;
+    const swapPct = d.memory.swapTotal > 0 ? Math.round(d.memory.swapUsed / d.memory.swapTotal * 100) : 0;
+    const cls = p => p>=t.memCrit?'crit':(p>=t.memWarn?'warn':'good');
+    $('resUtil').innerHTML = `
+        <div style="margin-bottom:14px">
+            <div class="bar">
+                <div style="width:80px" class="muted">RAM</div>
+                <div class="meter"><span class="${cls(memPct)}" style="width:${memPct}%"></span></div>
+                <div class="num mono" style="width:60px;text-align:right">${memPct}%</div>
+            </div>
+            <div class="muted" style="font-size:11px;margin-top:4px">
+                used ${h(fmtBytes(d.memory.used))} · avail ${h(fmtBytes(d.memory.avail))} · total ${h(fmtBytes(d.memory.total))}
+            </div>
+        </div>
+        <div>
+            <div class="bar">
+                <div style="width:80px" class="muted">SWAP</div>
+                <div class="meter"><span class="${cls(swapPct)}" style="width:${swapPct}%"></span></div>
+                <div class="num mono" style="width:60px;text-align:right">${swapPct}%</div>
+            </div>
+            <div class="muted" style="font-size:11px;margin-top:4px">
+                used ${h(fmtBytes(d.memory.swapUsed))} · total ${h(fmtBytes(d.memory.swapTotal))}
+            </div>
+        </div>`;
+}
+
+function renderDisks(d) {
+    $('diskCount').textContent = d.disks.length + ' mounts';
+    $('diskTable').innerHTML = d.disks.map(disk => {
+        const c = sevClass(disk.pct);
+        return `<tr>
+            <td class="mono">${h(disk.mount)}</td>
+            <td class="mono muted">${h(disk.fs)}</td>
+            <td class="num mono">${h(fmtBytes(disk.size))}</td>
+            <td class="num mono">${h(fmtBytes(disk.used))}</td>
+            <td class="num mono">${h(fmtBytes(disk.avail))}</td>
+            <td><div class="bar">
+                <div class="meter"><span class="${h(c)}" style="width:${h(disk.pct)}%"></span></div>
+                <span class="tag ${h(c)}">${h(disk.pct)}%</span>
+            </div></td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="6" class="muted">No filesystem data.</td></tr>';
+}
+
+function renderProcs(d) {
+    $('procCount').textContent = d.processes.length + ' shown';
+    $('procTable').innerHTML = d.processes.map(p => {
+        const cpuCls = p.cpu >= 50 ? 'crit' : (p.cpu >= 10 ? 'warn' : 'mute');
+        const memCls = p.mem >= 25 ? 'crit' : (p.mem >= 10 ? 'warn' : 'mute');
+        return `<tr>
+            <td class="num mono">${h(p.pid)}</td>
+            <td class="num mono muted">${h(p.ppid)}</td>
+            <td class="mono">${h(p.user)}</td>
+            <td class="mono" style="max-width:560px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(p.cmd)}</td>
+            <td class="num"><span class="tag ${h(memCls)}">${h(p.mem.toFixed(1))}</span></td>
+            <td class="num"><span class="tag ${h(cpuCls)}">${h(p.cpu.toFixed(1))}</span></td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="6" class="muted">No process data.</td></tr>';
+}
+
+function renderUsers(d) {
+    $('userCount').textContent = d.users.length + ' logged in';
+    $('userTable').innerHTML = d.users.map(u => `
+        <tr>
+            <td class="mono">${h(u.user)}</td>
+            <td class="mono muted">${h(u.tty)}</td>
+            <td class="mono">${h(u.from)}</td>
+            <td class="muted">${h(u.when)}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="muted">No active sessions.</td></tr>';
+}
+
+function renderFailures(d) {
+    const t = SOC_CONFIG.thresholds;
+    const total = d.failedLogins.reduce((a,b)=>a+b.count,0);
+    $('failCount').textContent = `${d.failedLogins.length} IPs · ${total} attempts`;
+    if (!d.failedLogins.length) {
+        $('failTable').innerHTML = '<tr><td colspan="4" class="muted">No failed-login data.</td></tr>';
+        return;
+    }
+    const max = Math.max(...d.failedLogins.map(f => f.count));
+    $('failTable').innerHTML = d.failedLogins.map(f => {
+        const cls = f.count >= t.failWarn ? 'crit' : (f.count >= 5 ? 'warn' : 'mute');
+        const pct = Math.round(f.count / max * 100);
+        const label = cls === 'mute' ? 'LOW' : cls.toUpperCase();
+        return `<tr>
+            <td class="mono">${h(f.ip)}</td>
+            <td class="num mono">${h(f.count)}</td>
+            <td><div class="meter"><span class="${h(cls==='mute'?'ok':cls)}" style="width:${h(pct)}%"></span></div></td>
+            <td><span class="tag ${h(cls)}">${h(label)}</span></td>
+        </tr>`;
+    }).join('');
+}
+
+function renderPorts(d) {
+    $('portCount').textContent = d.listeners.length + ' sockets';
+    $('portTable').innerHTML = d.listeners.map(l => `
+        <tr>
+            <td><span class="tag info">${h(l.proto.toUpperCase())}</span></td>
+            <td class="mono">${h(l.local)}</td>
+            <td class="mono muted">${h(l.peer)}</td>
+            <td class="mono muted" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h(l.proc)}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="muted">No listeners.</td></tr>';
+}
+
+/* =================================================================
+ * Live polling loop with backoff + visibility awareness
+ * ================================================================= */
+let pollTimer = null;
+let failures  = 0;
+let paused    = false;
+
+function setLive(state, text) {
+    const dot = $('liveDot'), label = $('liveText');
+    dot.className = 'live-dot ' + (state === 'ok' ? 'on' : (state === 'err' ? 'err' : ''));
+    label.textContent = text;
+}
+
+async function tick() {
+    if (paused) return;
+    try {
+        const d = await fetchData();
+        if (d && d.error) throw new Error(d.error);
+        renderAll(d);
+        failures = 0;
+        setLive('ok', 'live · ' + SOC_CONFIG.interval/1000 + 's');
+        schedule(SOC_CONFIG.interval);
+    } catch (e) {
+        failures++;
+        setLive('err', 'error · retry ' + Math.min(30, failures * 2) + 's');
+        // Exponential backoff, capped at 30s
+        schedule(Math.min(30000, 2000 * Math.pow(1.5, failures)));
+    }
+}
+
+function schedule(ms) {
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(tick, ms);
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        paused = true;
+        setLive('', 'paused (tab hidden)');
+        clearTimeout(pollTimer);
+    } else {
+        paused = false;
+        tick();
+    }
+});
+
+// Boot
+tick();
+</script>
+</body>
+</html>
