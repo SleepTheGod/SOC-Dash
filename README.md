@@ -182,4 +182,4 @@ The repository does not currently declare a license. Until one is added, all rig
 ## Acknowledgments
 
 Built for people who want a clear view of a server without installing a full monitoring stack. Inspired by the SOC dashboards that analysts stare at all day, distilled into a single file.
-```
+
